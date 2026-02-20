@@ -4,19 +4,19 @@ import logging
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# ===== Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„ØªØ³Ø¬ÙŠÙ„ =====
+# ===== إعدادات التسجيل =====
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# ===== Ø§Ù„Ù…ØªØºÙŠØ±Ø§Øª Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© (ØªÙØ³Ø­Ø¨ Ù…Ù† Railway) =====
+# ===== المتغيرات الأساسية (تُسحب من Railway) =====
 API_ID = int(os.environ.get("API_ID", 0))
 API_HASH = os.environ.get("API_HASH", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0)) # Ù‚Ù†Ø§Ø© Ø§Ù„ØªØ®Ø²ÙŠÙ†
-PUBLIC_CHANNEL = os.environ.get("PUBLIC_CHANNEL", "") # Ù‚Ù†Ø§Ø© Ø§Ù„Ù†Ø´Ø± Ø§Ù„Ø¹Ø§Ù…Ø©
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0)) # قناة التخزين
+PUBLIC_CHANNEL = os.environ.get("PUBLIC_CHANNEL", "") # قناة النشر العامة
 
 app = Client("BottemoBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# ===== Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª =====
+# ===== قاعدة البيانات =====
 def init_db():
     conn = sqlite3.connect("bot_data.db")
     cursor = conn.cursor()
@@ -37,23 +37,23 @@ def db_execute(query, params=(), fetch=True):
     conn.close()
     return res
 
-# ===== Ø§Ø³ØªÙ‚Ø¨Ø§Ù„ Ø§Ù„Ù…Ø­ØªÙˆÙ‰ Ù…Ù† Ù‚Ù†Ø§Ø© Ø§Ù„ØªØ®Ø²ÙŠÙ† =====
+# ===== استقبال المحتوى من قناة التخزين =====
 
 @app.on_message(filters.chat(CHANNEL_ID) & (filters.video | filters.document))
 async def receive_video(client, message):
     v_id = str(message.id)
     db_execute("INSERT OR REPLACE INTO videos (v_id, status) VALUES (?, ?)", (v_id, "waiting"), fetch=False)
-    await message.reply_text(f"âœ… ØªÙ… Ø§Ø³ØªÙ„Ø§Ù… Ø§Ù„ÙÙŠØ¯ÙŠÙˆ (ID: {v_id})\nØ§Ù„Ø¢Ù† Ø£Ø±Ø³Ù„ Ø§Ù„Ø¨ÙˆØ³ØªØ± (Ø§Ù„ØµÙˆØ±Ø©) Ù…Ø¹ ÙƒØªØ§Ø¨Ø© Ø§Ø³Ù… Ø§Ù„Ù…Ø³Ù„Ø³Ù„ ÙÙŠ Ø§Ù„ÙˆØµÙ (Caption).")
+    await message.reply_text(f"✅ تم استلام الفيديو (ID: {v_id})\nالآن أرسل البوستر (الصورة) مع كتابة اسم المسلسل في الوصف (Caption).")
 
 @app.on_message(filters.chat(CHANNEL_ID) & filters.photo)
 async def receive_poster(client, message):
     res = db_execute("SELECT v_id FROM videos WHERE status = 'waiting' ORDER BY rowid DESC LIMIT 1")
     if not res: return
     v_id = res[0][0]
-    title = message.caption or "Ù…Ø³Ù„Ø³Ù„ Ø¬Ø¯ÙŠØ¯"
+    title = message.caption or "مسلسل جديد"
     db_execute("UPDATE videos SET title = ?, poster_id = ?, status = 'awaiting_ep' WHERE v_id = ?",
                (title, message.photo.file_id, v_id), fetch=False)
-    await message.reply_text(f"ðŸ“Œ ØªÙ… Ø­ÙØ¸ Ø§Ù„Ø¨ÙˆØ³ØªØ± Ù„Ù€ **{title}**\nðŸ”¢ Ø£Ø±Ø³Ù„ Ø§Ù„Ø¢Ù† Ø±Ù‚Ù… Ø§Ù„Ø­Ù„Ù‚Ø© ÙÙ‚Ø·:")
+    await message.reply_text(f"📌 تم حفظ البوستر لـ **{title}**\n🔢 أرسل الآن رقم الحلقة فقط:")
 
 @app.on_message(filters.chat(CHANNEL_ID) & filters.text & ~filters.command(["start"]))
 async def receive_ep_number(client, message):
@@ -68,32 +68,32 @@ async def receive_ep_number(client, message):
     bot_info = await client.get_me()
     watch_link = f"https://t.me/{bot_info.username}?start={v_id}"
     
-    # --- Ø§Ù„Ù†Ø´Ø± Ø§Ù„ØªÙ„Ù‚Ø§Ø¦ÙŠ ÙÙŠ Ø§Ù„Ù‚Ù†Ø§Ø© Ø§Ù„Ø¹Ø§Ù…Ø© ---
+    # --- النشر التلقائي في القناة العامة ---
     if PUBLIC_CHANNEL:
         try:
-            caption = f"ðŸŽ¬ **{title}**\nðŸ”¹ **Ø§Ù„Ø­Ù„Ù‚Ø© Ø±Ù‚Ù…:** {ep_num}\n\nðŸ“¥ **Ù„Ù…Ø´Ø§Ù‡Ø¯Ø© Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ø¶ØºØ· Ø¹Ù„Ù‰ Ø§Ù„Ø²Ø± Ø£Ø¯Ù†Ø§Ù‡:**"
-            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("â–¶ï¸ ÙØªØ­ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø¢Ù†", url=watch_link)]])
+            caption = f"🎬 **{title}**\n🔹 **الحلقة رقم:** {ep_num}\n\n📥 **لمشاهدة الحلقة اضغط على الزر أدناه:**"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("▶️ فتح الحلقة الآن", url=watch_link)]])
             await client.send_photo(chat_id=PUBLIC_CHANNEL, photo=poster_id, caption=caption, reply_markup=reply_markup)
-            await message.reply_text(f"ðŸš€ ØªÙ… Ø§Ù„Ù†Ø´Ø± Ø¨Ù†Ø¬Ø§Ø­ ÙÙŠ @{PUBLIC_CHANNEL}")
+            await message.reply_text(f"🚀 تم النشر بنجاح في @{PUBLIC_CHANNEL}")
         except Exception as e:
-            await message.reply_text(f"âš ï¸ ØªÙ… Ø§Ù„Ø­ÙØ¸ ÙˆÙ„ÙƒÙ† ÙØ´Ù„ Ø§Ù„Ù†Ø´Ø±: {e}")
+            await message.reply_text(f"⚠️ تم الحفظ ولكن فشل النشر: {e}")
     else:
-        await message.reply_text(f"âœ… ØªÙ… Ø§Ù„Ø­ÙØ¸. Ø§Ù„Ø±Ø§Ø¨Ø· Ø§Ù„Ù…Ø¨Ø§Ø´Ø±:\n{watch_link}")
+        await message.reply_text(f"✅ تم الحفظ. الرابط المباشر:\n{watch_link}")
 
-# ===== Ù†Ø¸Ø§Ù… Ø§Ù„ØªØ´ØºÙŠÙ„ (Start) =====
+# ===== نظام التشغيل (Start) =====
 
 @app.on_message(filters.command("start") & filters.private)
 async def start_handler(client, message):
     if len(message.command) <= 1:
-        await message.reply_text(f"Ø£Ù‡Ù„Ø§Ù‹ Ø¨Ùƒ ÙŠØ§ Ù…Ø­Ù…Ø¯! Ø£Ø±Ø³Ù„ Ø±Ø§Ø¨Ø· Ø§Ù„Ø­Ù„Ù‚Ø© Ù„Ù„Ù…Ø´Ø§Ù‡Ø¯Ø©.")
+        await message.reply_text(f"أهلاً بك يا محمد! أرسل رابط الحلقة للمشاهدة.")
         return
 
     v_id = message.command[1]
     try:
-        # Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ ÙÙˆØ±Ø§Ù‹
+        # إرسال الفيديو فوراً
         await client.copy_message(message.chat.id, CHANNEL_ID, int(v_id), protect_content=True)
         
-        # Ø¹Ø±Ø¶ Ø­Ù„Ù‚Ø§Øª Ø§Ù„Ù…Ø³Ù„Ø³Ù„ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)
+        # عرض حلقات المسلسل (اختياري)
         video_info = db_execute("SELECT poster_id FROM videos WHERE v_id = ?", (v_id,))
         if video_info and video_info[0][0]:
             p_id = video_info[0][0]
@@ -102,12 +102,12 @@ async def start_handler(client, message):
                 btns = []; row = []
                 bot_user = (await client.get_me()).username
                 for vid, num in all_ep:
-                    label = f"â–¶ï¸ {num}" if vid == v_id else f"{num}"
+                    label = f"▶️ {num}" if vid == v_id else f"{num}"
                     row.append(InlineKeyboardButton(label, url=f"https://t.me/{bot_user}?start={vid}"))
                     if len(row) == 4: btns.append(row); row = []
                 if row: btns.append(row)
-                await message.reply_text("ðŸ“º Ø¨Ø§Ù‚ÙŠ Ø­Ù„Ù‚Ø§Øª Ø§Ù„Ù…Ø³Ù„Ø³Ù„:", reply_markup=InlineKeyboardMarkup(btns))
+                await message.reply_text("📺 باقي حلقات المسلسل:", reply_markup=InlineKeyboardMarkup(btns))
     except:
-        await message.reply_text("âŒ Ø¹Ø°Ø±Ø§Ù‹ØŒ Ø§Ù„Ø­Ù„Ù‚Ø© ØºÙŠØ± Ù…ØªÙˆÙØ±Ø© Ø­Ø§Ù„ÙŠØ§Ù‹.")
+        await message.reply_text("❌ عذراً، الحلقة غير متوفرة حالياً.")
 
 app.run()
