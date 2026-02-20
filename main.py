@@ -52,7 +52,13 @@ async def receive_poster(client, message):
     res = db_execute("SELECT v_id FROM videos WHERE status='waiting' ORDER BY rowid DESC LIMIT 1")
     if not res: return
     v_id = res[0][0]
-    db_execute("UPDATE videos SET poster_id=?, status='awaiting_ep' WHERE v_id=?", (message.photo.file_id, v_id), fetch=False)
+
+    poster_id = message.photo.file_id
+
+    # تحديث poster_id لجميع الحلقات الجديدة بنفس البوستر (ربط الحلقات تلقائيًا)
+    db_execute("UPDATE videos SET poster_id=? WHERE v_id=?", (poster_id, v_id), fetch=False)
+    
+    db_execute("UPDATE videos SET status='awaiting_ep' WHERE v_id=?", (v_id,), fetch=False)
     await message.reply_text(f"🖼 تم حفظ البوستر.\n🔢 أرسل الآن رقم الحلقة:")
 
 # ===== استقبال رقم الحلقة =====
@@ -95,7 +101,7 @@ async def send_video_with_list(client, chat_id, v_id):
         # إرسال الفيديو الحالي
         await client.copy_message(chat_id, CHANNEL_ID, int(v_id), protect_content=True)
 
-        # جلب poster_id للحلقة
+        # جلب poster_id ومدة الحلقة
         video_info = db_execute("SELECT poster_id, duration, quality, ep_num FROM videos WHERE v_id=?", (v_id,))
         if not video_info: return
         poster_id, duration, quality, ep_num = video_info[0]
@@ -105,7 +111,6 @@ async def send_video_with_list(client, chat_id, v_id):
         if all_ep and len(all_ep) > 1:
             btns = []
             row = []
-            bot_user = (await client.get_me()).username
             for vid, num in all_ep:
                 label = f"▶️ {num}" if vid == v_id else f"{num}"
                 row.append(InlineKeyboardButton(label, callback_data=f"watch_{vid}"))
@@ -113,6 +118,7 @@ async def send_video_with_list(client, chat_id, v_id):
                     btns.append(row)
                     row = []
             if row: btns.append(row)
+            
             caption = f"🎬 الحلقة {ep_num}\n⏱ المدة: {duration}\n✨ الجودة: {quality}\n\n📥 شاهد باقي الحلقات أسفل الفيديو"
             await client.send_message(chat_id, caption, reply_markup=InlineKeyboardMarkup(btns))
     except:
